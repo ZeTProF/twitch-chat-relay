@@ -5,11 +5,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 app.get('/', (req, res) => {
-  res.send('Twitch Mod Chat Relay Server is running!');
+  res.send('Twitch E2EE Relay Server is running!');
 });
 
 io.on('connection', (socket) => {
