@@ -7,7 +7,6 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-
 const rooms = new Map();
 
 wss.on('connection', (ws) => {
@@ -18,7 +17,7 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
 
-      // Gestione dell'ingresso in stanza
+      // Gestione ingresso stanza
       if (data.type === 'join' && data.room) {
         currentRoom = data.room;
         if (!rooms.has(currentRoom)) {
@@ -29,16 +28,15 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      // Gestione del broadcast dei messaggi cifrati
+      // Gestione invio messaggio
       if (data.type === 'message') {
-        // Usa la stanza specificata nel pacchetto o fallback su currentRoom
         const targetRoom = data.room || currentRoom;
         
         if (targetRoom && rooms.has(targetRoom)) {
           const roomClients = rooms.get(targetRoom);
           console.log(`[SERVER] Broadcast messaggio nella stanza ${targetRoom} a ${roomClients.size} client.`);
           
-          roomClients.get?.size || roomClients.forEach((client) => {
+          roomClients.forEach((client) => {
             if (client !== ws && client.readyState === ws.OPEN) {
               client.send(JSON.stringify(data));
             }
@@ -63,7 +61,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Server WebSocket nativo in ascolto sulla porta ${PORT}`);
 });
