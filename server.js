@@ -1,33 +1,61 @@
-const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const { WebSocketServer } = require('ws');
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Twitch E2EE Native WS Server is running!\n');
 });
 
-app.get('/', (req, res) => {
-  res.send('Twitch E2EE Relay Server is running!');
-});
+const wss = new WebSocketServer({ server });
 
-io.on('connection', (socket) => {
-  socket.on('join', (room) => {
-    socket.join(room);
+// Mappa per tenere traccia delle stanze e dei client connessi
+const rooms = new Map();
+
+wss.on('connection', (ws) => {
+  let currentRoom = null;
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+
+      // Gestione dell'ingresso in stanza
+      if (data.type === 'join' && data.room) {
+        currentRoom = data.room;
+        if (!rooms.has(currentRoom)) {
+          rooms.set(currentRoom, new Set());
+        }
+        rooms.get(currentRoom).add(ws);
+        return;
+      }
+
+      // Gestione del broadcast dei messaggi cifrati
+      if (data.type === 'message' && currentRoom) {
+        const roomClients = rooms.get(currentRoom);
+        if (roomClients) {
+          roomClients.forEach((client) => {
+            // Invia il messaggio a tutti gli altri nella stessa stanza (tranne chi lo ha inviato)
+            if (client !== ws && client.readyState === ws.OPEN) {
+              client.send(JSON.stringify(data));
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Errore parsing messaggio:', e);
+    }
   });
 
-  socket.on('message', (data) => {
-    if (data && data.channel) {
-      socket.to(data.channel).emit('message', data);
+  ws.on('close', () => {
+    if (currentRoom && rooms.has(currentRoom)) {
+      rooms.get(currentRoom).delete(ws);
+      if (rooms.get(currentRoom).size === 0) {
+        rooms.delete(currentRoom);
+      }
     }
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server WebSocket nativo in ascolto sulla porta ${PORT}`);
 });
