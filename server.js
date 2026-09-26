@@ -8,11 +8,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-// Mappa per tenere traccia delle stanze e dei client connessi
 const rooms = new Map();
 
 wss.on('connection', (ws) => {
   let currentRoom = null;
+  console.log('[SERVER] Nuovo client connesso.');
 
   ws.on('message', (message) => {
     try {
@@ -25,29 +25,37 @@ wss.on('connection', (ws) => {
           rooms.set(currentRoom, new Set());
         }
         rooms.get(currentRoom).add(ws);
+        console.log(`[SERVER] Client entrato nella stanza: ${currentRoom} (Totale client in stanza: ${rooms.get(currentRoom).size})`);
         return;
       }
 
       // Gestione del broadcast dei messaggi cifrati
-      if (data.type === 'message' && currentRoom) {
-        const roomClients = rooms.get(currentRoom);
-        if (roomClients) {
-          roomClients.forEach((client) => {
-            // Invia il messaggio a tutti gli altri nella stessa stanza (tranne chi lo ha inviato)
+      if (data.type === 'message') {
+        // Usa la stanza specificata nel pacchetto o fallback su currentRoom
+        const targetRoom = data.room || currentRoom;
+        
+        if (targetRoom && rooms.has(targetRoom)) {
+          const roomClients = rooms.get(targetRoom);
+          console.log(`[SERVER] Broadcast messaggio nella stanza ${targetRoom} a ${roomClients.size} client.`);
+          
+          roomClients.get?.size || roomClients.forEach((client) => {
             if (client !== ws && client.readyState === ws.OPEN) {
               client.send(JSON.stringify(data));
             }
           });
+        } else {
+          console.warn(`[SERVER] Ricevuto messaggio per stanza sconosciuta o vuota: ${targetRoom}`);
         }
       }
     } catch (e) {
-      console.error('Errore parsing messaggio:', e);
+      console.error('[SERVER] Errore parsing messaggio:', e);
     }
   });
 
   ws.on('close', () => {
     if (currentRoom && rooms.has(currentRoom)) {
       rooms.get(currentRoom).delete(ws);
+      console.log(`[SERVER] Client disconnesso dalla stanza: ${currentRoom}`);
       if (rooms.get(currentRoom).size === 0) {
         rooms.delete(currentRoom);
       }
